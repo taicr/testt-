@@ -6,7 +6,7 @@ flowchart TD
         S["File Slide (PDF/PPTX)"] -->|"Trích xuất Text/OCR"| TXT_S["Văn bản Slide + Slide Numbers"]
         V -->|"Vision (Keyframe + OCR)"| TXT_S_Vid["Văn bản Slide từ Video + Timestamps"]
 
-        TXT_A -->|"Chunking & Embedding"| DB[("Vector Database\n+ Metadata: Timestamps, Slide#, Source")]
+        TXT_A -->|"Chunking & Embedding"| DB[("Vector Database + Metadata: Timestamps, Slide , Source")]
         TXT_S -->|"Chunking & Embedding"| DB
         TXT_S_Vid -->|"Chunking & Embedding"| DB
     end
@@ -45,7 +45,7 @@ flowchart TD
         T_Sum -->|"Summary Text"| TTS["Text-to-Speech"]
         TTS --> VC["Voice Customizer"] --> OUT_Audio["Output Audio Summary"]
 
-        RA -->|"Data for Viz"| VIZ["Tạo Trực quan hóa\nMindmap/Concept Links"]
+        RA -->|"Data for Viz"| VIZ["Tạo Trực quan hóa + Mindmap/Concept Links"]
         VIZ --> OUT_Viz["Output Hình ảnh/Interactive"]
 
         OUT_Text --> UserFeedback["User Feedback"]
