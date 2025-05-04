@@ -1,6 +1,11 @@
 # Hướng dẫn triển khai hệ thống phân tích ảnh thông minh cho bán lẻ
-1. Kiến trúc tổng thể  
-Mô hình:  
+
+Mô tả: Một ứng dụng CV giúp các cửa hàng bán lẻ phân tích hình ảnh từ camera hoặc ảnh tải lên để:  
+Nhận diện mã số sản phẩm (dạng chữ số viết tay hoặc in, ví dụ: mã vạch, số seri).  
+Phát hiện và xác định các sản phẩm trên kệ hàng.  
+Phân loại bối cảnh hoặc loại sản phẩm trong ảnh (ví dụ: đồ uống, đồ ăn, quần áo).  
+1. Kiến trúc tổng thể    
+Mô hình:   
 MNIST (Nhận diện chữ số): Một CNN đơn giản (3-4 tầng convolution) để phân loại chữ số.    
 COCO (Phát hiện đối tượng): Mô hình YOLOv8 hoặc Faster R-CNN để phát hiện sản phẩm.  
 ImageNet (Phân loại): Mô hình ResNet50 hoặc EfficientNet làm backbone, fine-tune cho phân loại sản phẩm.  
