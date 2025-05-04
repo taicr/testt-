@@ -1,5 +1,23 @@
 # Hướng dẫn triển khai hệ thống phân tích ảnh thông minh cho bán lẻ
-
+1. Kiến trúc tổng thể  
+Mô hình:  
+MNIST (Nhận diện chữ số): Một CNN đơn giản (3-4 tầng convolution) để phân loại chữ số.    
+COCO (Phát hiện đối tượng): Mô hình YOLOv8 hoặc Faster R-CNN để phát hiện sản phẩm.  
+ImageNet (Phân loại): Mô hình ResNet50 hoặc EfficientNet làm backbone, fine-tune cho phân loại sản phẩm.  
+Pipeline:  
+Nhận ảnh đầu vào (từ camera hoặc tải lên).  
+Chạy mô hình MNIST để nhận diện mã số (nếu có chữ số trong ảnh).  
+Chạy mô hình COCO để phát hiện và xác định sản phẩm.  
+Chạy mô hình ImageNet để phân loại loại sản phẩm hoặc bối cảnh.  
+Kết hợp kết quả để đưa ra báo cáo (ví dụ: “Mã số 1234, 5 chai nước, danh mục đồ uống”).  
+2. Công cụ và thư viện  
+Thư viện:  
+TensorFlow hoặc PyTorch (cho huấn luyện và inference).  
+Ultralytics YOLOv8 (cho object detection với COCO).  
+Hugging Face Transformers hoặc torchvision (cho mô hình ImageNet).  
+OpenCV (xử lý ảnh).  
+Môi trường: Google Colab (miễn phí, có GPU), Jupyter Notebook, hoặc máy tính cá nhân với GPU cơ bản (như NVIDIA GTX 1650).  
+Triển khai: Dùng Flask hoặc FastAPI để tạo giao diện web đơn giản, cho phép người dùng tải ảnh và xem kết quả.  
 ## 1. Cài đặt môi trường
 
 ```bash
