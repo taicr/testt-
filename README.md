@@ -1,700 +1,198 @@
-# Hướng dẫn triển khai hệ thống phân tích ảnh thông minh cho bán lẻ
+**Dự án: Đánh giá mô hình ResNet trên 3 bộ dữ liệu (CIFAR-10, Fashion-MNIST, Tiny ImageNet)**
 
-Mô tả: Một ứng dụng CV giúp các cửa hàng bán lẻ phân tích hình ảnh từ camera hoặc ảnh tải lên để:  
-Nhận diện mã số sản phẩm (dạng chữ số viết tay hoặc in, ví dụ: mã vạch, số seri).  
-Phát hiện và xác định các sản phẩm trên kệ hàng.  
-Phân loại bối cảnh hoặc loại sản phẩm trong ảnh (ví dụ: đồ uống, đồ ăn, quần áo).  
-1. Kiến trúc tổng thể    
-Mô hình:   
-MNIST (Nhận diện chữ số): Một CNN đơn giản (3-4 tầng convolution) để phân loại chữ số.    
-COCO (Phát hiện đối tượng): Mô hình YOLOv8 hoặc Faster R-CNN để phát hiện sản phẩm.  
-ImageNet (Phân loại): Mô hình ResNet50 hoặc EfficientNet làm backbone, fine-tune cho phân loại sản phẩm.  
-Pipeline:  
-Nhận ảnh đầu vào (từ camera hoặc tải lên).  
-Chạy mô hình MNIST để nhận diện mã số (nếu có chữ số trong ảnh).  
-Chạy mô hình COCO để phát hiện và xác định sản phẩm.  
-Chạy mô hình ImageNet để phân loại loại sản phẩm hoặc bối cảnh.  
-Kết hợp kết quả để đưa ra báo cáo (ví dụ: “Mã số 1234, 5 chai nước, danh mục đồ uống”).  
-2. Công cụ và thư viện  
-Thư viện:  
-TensorFlow hoặc PyTorch (cho huấn luyện và inference).  
-Ultralytics YOLOv8 (cho object detection với COCO).  
-Hugging Face Transformers hoặc torchvision (cho mô hình ImageNet).  
-OpenCV (xử lý ảnh).  
-Môi trường: Google Colab (miễn phí, có GPU), Jupyter Notebook, hoặc máy tính cá nhân với GPU cơ bản (như NVIDIA GTX 1650).  
-Triển khai: Dùng Flask hoặc FastAPI để tạo giao diện web đơn giản, cho phép người dùng tải ảnh và xem kết quả.  
-## 1. Cài đặt môi trường
+### Ý tưởng dự án: Phân loại hình ảnh sử dụng ResNet và so sánh hiệu suất trên 3 bộ dữ liệu khác nhau
 
-```bash
-# Tạo môi trường ảo Python
-python -m venv retail_vision_env
+#### 1. Mô tả dự án
+- **Mục tiêu**: Sử dụng kiến trúc **ResNet** (ví dụ: ResNet-18 hoặc ResNet-50) để huấn luyện mô hình phân loại hình ảnh trên 3 bộ dữ liệu: **CIFAR-10**, **Fashion-MNIST**, và **Tiny ImageNet**. Sau đó, đánh giá hiệu suất và chọn bộ dữ liệu/mô hình tốt nhất dựa trên các tiêu chí như độ chính xác, tốc độ, và khả năng tổng quát hóa.
+- **Ứng dụng thực tế**: Hiểu cách mô hình deep learning hoạt động trên các loại dữ liệu khác nhau (màu, grayscale, phức tạp), từ đó áp dụng vào các bài toán phân loại thực tế như nhận diện sản phẩm, phân loại đối tượng tự nhiên, hoặc giám sát chất lượng.
 
-# Kích hoạt môi trường
-# Trên Windows
-retail_vision_env\Scripts\activate
-# Trên Linux/Mac
-source retail_vision_env/bin/activate
+#### 2. Ba bộ dữ liệu
+Dưới đây là thông tin chi tiết về 3 bộ dữ liệu:
 
-# Cài đặt các thư viện cần thiết
-pip install tensorflow opencv-python pillow flask ultralytics numpy
-```
+1. **CIFAR-10**:
+   - **Mô tả**: Bộ dữ liệu gồm 60,000 hình ảnh màu (RGB, 32x32 pixel) thuộc 10 lớp (xe hơi, chim, mèo, hươu, chó, ếch, ngựa, tàu, máy bay, xe tải).
+   - **Đặc điểm**:
+     - Hình ảnh màu, kích thước nhỏ, đa dạng đối tượng.
+     - Phù hợp cho các mô hình đơn giản hoặc thử nghiệm nhanh.
+   - **Số lượng**: 50,000 train, 10,000 test.
+   - **Chuẩn bị**: Tải từ torchvision (PyTorch) hoặc TensorFlow Datasets. Chuẩn hóa pixel (0-1), áp dụng augmentation (lật ngang, dịch chuyển).
 
-## 2. Cấu trúc thư mục dự án
+2. **Fashion-MNIST**:
+   - **Mô tả**: Bộ dữ liệu gồm 70,000 hình ảnh thang xám (grayscale, 28x28 pixel) thuộc 10 lớp quần áo (áo thun, quần, áo len, váy, áo khoác, sandal, áo sơ mi, giày thể thao, túi xách, giày cao cổ).
+   - **Đặc điểm**:
+     - Hình ảnh grayscale (1 kênh), kích thước nhỏ, ít phức tạp hơn CIFAR-10 về màu sắc.
+     - Thích hợp cho các bài toán phân loại đơn giản, đặc biệt khi tài nguyên hạn chế.
+   - **Số lượng**: 60,000 train, 10,000 test.
+   - **Chuẩn bị**: Tải từ torchvision hoặc TensorFlow Datasets. Chuyển thành 3 kênh (lặp lại kênh grayscale) để phù hợp với ResNet. Chuẩn hóa và augmentation.
 
-```
-smart_retail_system/
-│
-├── app.py                  # Ứng dụng Flask chính
-├── models/
-│   ├── mnist_model.h5      # Mô hình nhận dạng chữ số
-│   └── yolov8n.pt          # Mô hình YOLOv8 (tự động tải về)
-├── static/
-│   ├── uploads/            # Thư mục lưu ảnh tải lên
-│   ├── results/            # Thư mục lưu kết quả phân tích
-│   └── css/                # CSS cho giao diện
-├── templates/
-│   ├── index.html          # Trang chính
-│   └── results.html        # Trang hiển thị kết quả
-└── utils/
-    ├── digit_detector.py   # Module xử lý MNIST 
-    ├── object_detector.py  # Module xử lý COCO/YOLO
-    └── image_classifier.py # Module xử lý ImageNet
-```
+3. **Tiny ImageNet**:
+   - **Mô tả**: Bộ dữ liệu gồm 120,000 hình ảnh màu (RGB, 64x64 pixel) thuộc 200 lớp (các đối tượng tự nhiên như động vật, đồ vật, thực vật). Đây là phiên bản thu nhỏ của ImageNet.
+   - **Đặc điểm**:
+     - Hình ảnh phức tạp hơn CIFAR-10, số lớp nhiều hơn, yêu cầu mô hình mạnh hơn.
+     - Phù hợp để đánh giá khả năng xử lý dữ liệu quy mô lớn.
+   - **Số lượng**: 100,000 train, 10,000 validation, 10,000 test.
+   - **Chuẩn bị**: Tải từ trang chính Tiny ImageNet. Chuẩn hóa, augmentation (resize về 64x64 hoặc 224x224 nếu cần).
 
-## 3. Huấn luyện mô hình MNIST
+#### 3. Quy trình thực hiện dự án
+1. **Chuẩn bị dữ liệu**:
+   - Tải 3 bộ dữ liệu từ torchvision (CIFAR-10, Fashion-MNIST) và trang Tiny ImageNet.
+   - **Chuẩn hóa**:
+     - CIFAR-10: Normalize pixel (0-1), giữ nguyên 32x32.
+     - Fashion-MNIST: Chuyển từ 1 kênh sang 3 kênh (lặp kênh grayscale), resize về 32x32 (để đồng nhất với CIFAR-10), normalize.
+     - Tiny ImageNet: Resize về 64x64 hoặc 224x224 (tùy cấu hình ResNet), normalize.
+   - **Augmentation**: Áp dụng lật ngang, xoay nhẹ, dịch chuyển ngẫu nhiên (sử dụng torchvision.transforms hoặc Albumentations).
+   - Chia dữ liệu: Dùng tập train/test mặc định của từng bộ dữ liệu.
 
-Tạo file `train_mnist.py` để huấn luyện mô hình nhận dạng chữ số:
+2. **Xây dựng mô hình**:
+   - **Kiến trúc**: Sử dụng **ResNet-18** (hoặc ResNet-50 nếu có đủ tài nguyên) từ torchvision hoặc TensorFlow.
+   - **Điều chỉnh**:
+     - CIFAR-10: Thay lớp fully connected cuối thành 10 output (10 lớp).
+     - Fashion-MNIST: Tương tự, 10 output.
+     - Tiny ImageNet: Thay lớp fully connected thành 200 output.
+   - **Huấn luyện**:
+     - Framework: PyTorch hoặc TensorFlow.
+     - Optimizer: Adam hoặc SGD với momentum.
+     - Loss: Cross-Entropy.
+     - Batch size: ~128 (tùy GPU).
+     - Epoch: ~50-100 (dùng early stopping nếu cần).
+     - Learning rate: Bắt đầu 0.001, giảm dần (scheduler).
+   - Huấn luyện 3 mô hình riêng biệt trên 3 bộ dữ liệu.
+
+3. **Đánh giá hiệu suất**:
+   - **Chỉ số**:
+     - **Accuracy (Top-1)**: Tỷ lệ phân loại đúng trên tập test.
+     - **Top-5 Accuracy** (cho Tiny ImageNet): Tỷ lệ dự đoán đúng trong top 5 lớp.
+     - **FPS (Frames Per Second)**: Đo tốc độ inference trên GPU (ví dụ: RTX 3060).
+     - **Loss**: Giá trị loss trên tập test.
+   - **Kiểm tra tổng quát hóa**:
+     - Thử mô hình CIFAR-10 và Fashion-MNIST trên một số mẫu từ Tiny ImageNet (hoặc ngược lại) để đánh giá khả năng chuyển giao.
+   - **Phân tích lỗi**:
+     - Sử dụng confusion matrix để xem các lớp bị nhầm lẫn.
+     - Visualize các trường hợp phân loại sai (dùng matplotlib hoặc seaborn).
+
+4. **So sánh và chọn mô hình tốt nhất**:
+   - **Bảng so sánh**:
+     - Accuracy, Top-5 Accuracy (nếu có), FPS, Loss.
+     - Thời gian huấn luyện (epoch, giờ).
+   - **Phân tích**:
+     - **CIFAR-10**: Accuracy cao (~90-95%), FPS nhanh do kích thước ảnh nhỏ, nhưng dữ liệu đơn giản, ít thách thức.
+     - **Fashion-MNIST**: Accuracy cao (~90-93%), FPS nhanh nhất (do grayscale), nhưng thiếu thông tin màu sắc, ít phức tạp.
+     - **Tiny ImageNet**: Accuracy thấp hơn (~60-70% do 200 lớp), FPS chậm hơn do ảnh lớn và số lớp nhiều, nhưng phản ánh bài toán thực tế hơn.
+   - **Tiêu chí chọn**:
+     - Nếu ưu tiên độ chính xác và tốc độ: CIFAR-10 hoặc Fashion-MNIST.
+     - Nếu ưu tiên khả năng xử lý bài toán phức tạp: Tiny ImageNet.
+     - Nếu cần triển khai thực tế: Xem xét FPS và tài nguyên phần cứng.
+
+5. **Cải thiện (Tùy chọn)**:
+   - Thử các biến thể ResNet (ResNet-50, ResNet-101) để so sánh.
+   - Sử dụng transfer learning: Load pre-trained ResNet (trên ImageNet) và fine-tune trên 3 bộ dữ liệu.
+   - Kết hợp dữ liệu (ví dụ: huấn luyện trên CIFAR-10 + Fashion-MNIST) để cải thiện tổng quát hóa.
+
+#### 4. Công cụ và tài nguyên
+- **Thư viện**:
+  - PyTorch: torchvision (cho ResNet, CIFAR-10, Fashion-MNIST), torch.utils.data.
+  - TensorFlow: tf.keras.applications (cho ResNet), tensorflow_datasets.
+  - Matplotlib, Seaborn: Visualize kết quả.
+- **Phần cứng**: GPU (RTX 3060 hoặc cao hơn) hoặc Google Colab Pro/TPU.
+- **Dataset**:
+  - CIFAR-10, Fashion-MNIST: Tải từ torchvision hoặc TensorFlow Datasets.
+  - Tiny ImageNet: Tải từ https://tiny-imagenet.herokuapp.com/.
+- **Môi trường**: Jupyter Notebook, VSCode.
+
+#### 5. Kết quả mong đợi
+- **CIFAR-10**: Accuracy ~90-95%, FPS cao (~100-200 FPS trên RTX 3060), dễ huấn luyện.
+- **Fashion-MNIST**: Accuracy ~90-93%, FPS cao nhất (~150-250 FPS), ít tốn tài nguyên.
+- **Tiny ImageNet**: Accuracy ~60-70% (Top-1), ~85-90% (Top-5), FPS thấp hơn (~50-100 FPS), yêu cầu tính toán lớn.
+- **Mô hình tốt nhất**:
+  - Nếu ưu tiên tốc độ và độ chính xác cao trên bài toán đơn giản: Fashion-MNIST.
+  - Nếu ưu tiên bài toán thực tế, phức tạp: Tiny ImageNet (dù accuracy thấp hơn).
+  - CIFAR-10 là lựa chọn cân bằng.
+
+#### 6. Báo cáo và trình bày
+- **Báo cáo**:
+  - Mô tả 3 bộ dữ liệu, quy trình huấn luyện, đánh giá.
+  - Bảng so sánh Accuracy, Top-5 Accuracy, FPS, Loss.
+  - Phân tích lỗi (confusion matrix, ví dụ hình ảnh bị nhầm).
+  - Kết luận: Bộ dữ liệu nào phù hợp nhất với ResNet và tại sao.
+- **Trình bày trực quan**:
+  - Biểu đồ Accuracy/Loss theo epoch (train/test).
+  - Confusion matrix cho từng bộ dữ liệu.
+  - Hiển thị các mẫu phân loại đúng/sai (dùng matplotlib).
+  - Biểu đồ so sánh FPS giữa 3 mô hình.
+
+#### 7. Mở rộng (Tùy chọn)
+- So sánh ResNet với các kiến trúc khác (VGG, EfficientNet, MobileNet).
+- Thử nghiệm trên dữ liệu thực tế (thu thập ảnh từ camera/điện thoại).
+- Triển khai mô hình trên thiết bị nhúng (Raspberry Pi, Jetson Nano).
+- Dùng kỹ thuật như mixup, cutout để cải thiện accuracy.
+
+---
+
+### Code mẫu (PyTorch)
+Dưới đây là code cơ bản để huấn luyện ResNet-18 trên CIFAR-10 (có thể điều chỉnh cho Fashion-MNIST và Tiny ImageNet):
 
 ```python
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
+from torchvision.models import resnet18
 
-# Tải dữ liệu MNIST
-(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+# Device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Tiền xử lý dữ liệu
-x_train = x_train.reshape(-1, 28, 28, 1).astype('float32') / 255.0
-x_test = x_test.reshape(-1, 28, 28, 1).astype('float32') / 255.0
-y_train = tf.keras.utils.to_categorical(y_train)
-y_test = tf.keras.utils.to_categorical(y_test)
-
-# Xây dựng mô hình LeNet
-model = Sequential([
-    Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(28, 28, 1)),
-    MaxPooling2D(pool_size=(2, 2)),
-    Conv2D(64, kernel_size=(3, 3), activation='relu'),
-    MaxPooling2D(pool_size=(2, 2)),
-    Flatten(),
-    Dense(128, activation='relu'),
-    Dropout(0.5),
-    Dense(10, activation='softmax')
+# Transform
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-# Biên dịch mô hình
-model.compile(
-    optimizer=Adam(),
-    loss='categorical_crossentropy',
-    metrics=['accuracy']
-)
+# Load CIFAR-10
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True)
+testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False)
 
-# Early stopping để tránh overfit
-early_stopping = EarlyStopping(
-    monitor='val_loss',
-    patience=5,
-    restore_best_weights=True
-)
+# Model
+model = resnet18(pretrained=False).to(device)
+model.fc = nn.Linear(model.fc.in_features, 10).to(device)  # 10 classes
 
-# Huấn luyện mô hình
-model.fit(
-    x_train, y_train,
-    batch_size=128,
-    epochs=15,
-    validation_split=0.2,
-    callbacks=[early_stopping]
-)
+# Loss and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-# Đánh giá mô hình
-test_loss, test_acc = model.evaluate(x_test, y_test)
-print(f'Độ chính xác trên tập test: {test_acc:.4f}')
+# Training
+for epoch in range(50):
+    model.train()
+    running_loss = 0.0
+    for i, data in enumerate(trainloader, 0):
+        inputs, labels = data[0].to(device), data[1].to(device)
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+    print(f'Epoch {epoch+1}, Loss: {running_loss/len(trainloader)}')
 
-# Lưu mô hình
-model.save('models/mnist_model.h5')
-print('Đã lưu mô hình tại models/mnist_model.h5')
+# Testing
+model.eval()
+correct = 0
+total = 0
+with torch.no_grad():
+    for data in testloader:
+        images, labels = data[0].to(device), data[1].to(device)
+        outputs = model(images)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+print(f'Accuracy: {100 * correct / total}%')
 ```
 
-## 4. Triển khai các module xử lý
+- **Fashion-MNIST**: Thay `CIFAR10` thành `FashionMNIST`, chuyển ảnh 1 kênh sang 3 kênh (dùng `transforms.Lambda`).
+- **Tiny ImageNet**: Tải dữ liệu thủ công, điều chỉnh `model.fc` thành 200 output, resize ảnh về 64x64 hoặc 224x224.
 
-### Module nhận dạng chữ số (`utils/digit_detector.py`):
+---
 
-```python
-import cv2
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-
-class DigitDetector:
-    def __init__(self, model_path):
-        self.model = load_model(model_path)
-    
-    def preprocess_image(self, image):
-        """Tiền xử lý ảnh cho MNIST"""
-        # Chuyển sang ảnh xám
-        if len(image.shape) == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = image
-            
-        # Phát hiện các vùng có thể chứa chữ số
-        # Đoạn này có thể phức tạp hơn trong thực tế (sử dụng contour detection)
-        regions = self._detect_digit_regions(gray)
-        
-        results = []
-        for region in regions:
-            # Tiền xử lý vùng ảnh
-            processed = cv2.resize(region, (28, 28))
-            processed = processed.astype('float32') / 255.0
-            processed = processed.reshape(1, 28, 28, 1)
-            
-            # Nhận dạng chữ số
-            prediction = self.model.predict(processed)
-            digit = np.argmax(prediction)
-            confidence = np.max(prediction)
-            
-            if confidence > 0.5:  # Ngưỡng tin cậy
-                results.append({
-                    "digit": int(digit),
-                    "confidence": float(confidence)
-                })
-        
-        return results
-    
-    def _detect_digit_regions(self, gray_image):
-        """Phát hiện các vùng có thể chứa chữ số"""
-        # Đây là phiên bản đơn giản, trong thực tế sẽ phức tạp hơn
-        # Giả sử toàn bộ ảnh là một chữ số
-        return [gray_image]
-
-    def detect(self, image):
-        """API chính cho việc phát hiện chữ số"""
-        return self.preprocess_image(image)
-```
-
-### Module phát hiện đối tượng (`utils/object_detector.py`):
-
-```python
-import cv2
-import numpy as np
-from ultralytics import YOLO
-
-class ObjectDetector:
-    def __init__(self, model_path='yolov8n.pt', conf_threshold=0.25):
-        self.model = YOLO(model_path)
-        self.conf_threshold = conf_threshold
-        
-        # Ánh xạ danh mục bán lẻ (đơn giản hóa)
-        self.retail_categories = {
-            "bottle": "Đồ uống",
-            "cup": "Đồ uống",
-            "wine glass": "Đồ uống",
-            "apple": "Thực phẩm",
-            "banana": "Thực phẩm",
-            "sandwich": "Thực phẩm",
-            "orange": "Thực phẩm",
-            "broccoli": "Thực phẩm",
-            "carrot": "Thực phẩm",
-            "hot dog": "Thực phẩm",
-            "pizza": "Thực phẩm",
-            "donut": "Thực phẩm",
-            "cake": "Thực phẩm",
-            "chair": "Nội thất",
-            "couch": "Nội thất",
-            "potted plant": "Nội thất",
-            "bed": "Nội thất",
-            "laptop": "Điện tử",
-            "keyboard": "Điện tử",
-            "cell phone": "Điện tử",
-            "microwave": "Điện tử",
-            "refrigerator": "Điện tử",
-            "book": "Văn phòng phẩm",
-            "clock": "Đồ gia dụng",
-            "vase": "Đồ gia dụng",
-            "scissors": "Văn phòng phẩm",
-            "toothbrush": "Vật dụng cá nhân",
-            "hair drier": "Vật dụng cá nhân",
-            "tie": "Thời trang",
-            "handbag": "Thời trang",
-            "backpack": "Thời trang",
-            "umbrella": "Thời trang"
-        }
-    
-    def detect(self, image):
-        """Phát hiện đối tượng trong ảnh"""
-        results = self.model(image)
-        objects = []
-        
-        # Lấy kết quả nhận diện
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()  # Tọa độ hộp
-                confidence = box.conf[0].item()  # Độ tin cậy
-                class_id = int(box.cls[0].item())  # ID lớp
-                class_name = result.names[class_id]  # Tên lớp
-                
-                # Chỉ bao gồm các đối tượng trong danh mục bán lẻ và có độ tin cậy cao
-                if class_name in self.retail_categories and confidence > self.conf_threshold:
-                    objects.append({
-                        "class_name": class_name,
-                        "category": self.retail_categories.get(class_name, "Khác"),
-                        "confidence": float(confidence),
-                        "box": [float(x1), float(y1), float(x2), float(y2)]
-                    })
-        
-        return objects
-```
-
-### Module phân loại ảnh (`utils/image_classifier.py`):
-
-```python
-import cv2
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.applications import ResNet50
-from tensorflow.keras.applications.resnet50 import preprocess_input, decode_predictions
-
-class ImageClassifier:
-    def __init__(self):
-        # Tải mô hình ResNet50 đã được huấn luyện trước trên ImageNet
-        self.model = ResNet50(weights='imagenet')
-    
-    def classify(self, image, top_k=5):
-        """Phân loại ảnh sử dụng ResNet50"""
-        # Tiền xử lý ảnh cho ResNet50
-        img = cv2.resize(image, (224, 224))
-        img = np.expand_dims(img, axis=0)
-        img = preprocess_input(img)
-        
-        # Dự đoán
-        prediction = self.model.predict(img)
-        decoded = decode_predictions(prediction, top=top_k)[0]
-        
-        # Định dạng kết quả
-        classifications = []
-        for _, class_name, confidence in decoded:
-            classifications.append({
-                "class_name": class_name,
-                "confidence": float(confidence)
-            })
-        
-        return classifications
-```
-
-## 5. Hoàn thiện ứng dụng Flask chính (`app.py`)
-
-```python
-import os
-import cv2
-import time
-import numpy as np
-from flask import Flask, request, render_template, jsonify, redirect, url_for
-
-# Import các module xử lý
-from utils.digit_detector import DigitDetector
-from utils.object_detector import ObjectDetector
-from utils.image_classifier import ImageClassifier
-
-app = Flask(__name__)
-
-# Tạo thư mục cho uploads và results
-os.makedirs('static/uploads', exist_ok=True)
-os.makedirs('static/results', exist_ok=True)
-
-# Tải các mô hình
-print("Đang tải các mô hình...")
-digit_detector = DigitDetector('models/mnist_model.h5')
-object_detector = ObjectDetector()  # Sẽ tự động tải YOLOv8n
-image_classifier = ImageClassifier()  # Sẽ tải ResNet50
-print("Đã tải xong các mô hình!")
-
-def analyze_image(image_path):
-    """Pipeline phân tích đầy đủ cho một ảnh"""
-    # Đọc ảnh
-    image = cv2.imread(image_path)
-    if image is None:
-        return {"error": "Không thể đọc ảnh"}, None
-    
-    # Chạy cả ba mô hình
-    digits = digit_detector.detect(image)
-    objects = object_detector.detect(image)
-    classifications = image_classifier.classify(image)
-    
-    # Kết hợp kết quả
-    result = {
-        "digits": digits,
-        "objects": objects,
-        "classifications": classifications
-    }
-    
-    # Hiển thị kết quả (vẽ hộp giới hạn, v.v.)
-    visual_result = image.copy()
-    
-    # Vẽ các đối tượng phát hiện được
-    for obj in objects:
-        x1, y1, x2, y2 = map(int, obj["box"])
-        class_name = obj["class_name"]
-        category = obj["category"]
-        confidence = obj["confidence"]
-        
-        cv2.rectangle(visual_result, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(visual_result, f"{class_name} ({confidence:.2f})", 
-                  (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    
-    # Nếu tìm thấy các chữ số, hiển thị chúng
-    if digits:
-        digit_text = "Digits: " + ", ".join([f"{d['digit']} ({d['confidence']:.2f})" for d in digits])
-        cv2.putText(visual_result, digit_text, (10, 30), 
-                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-    
-    # Lưu và trả về đường dẫn đến ảnh đã được phân tích
-    timestamp = str(int(time.time()))
-    result_path = f"static/results/result_{timestamp}.jpg"
-    cv2.imwrite(result_path, visual_result)
-    
-    return result, result_path
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/analyze', methods=['POST'])
-def upload_and_analyze():
-    if 'file' not in request.files:
-        return jsonify({'error': 'Không có phần file'})
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'Không có file được chọn'})
-    
-    # Lưu ảnh đã tải lên
-    filename = f"upload_{int(time.time())}.jpg"
-    filepath = os.path.join('static/uploads', filename)
-    file.save(filepath)
-    
-    # Phân tích ảnh
-    try:
-        analysis_result, result_image_path = analyze_image(filepath)
-        if "error" in analysis_result:
-            return jsonify(analysis_result)
-        
-        # Định dạng phản hồi để hiển thị
-        summary = {
-            'image_path': '/' + filepath,
-            'result_image_path': '/' + result_image_path,
-            'digit_count': len(analysis_result['digits']),
-            'digits': [d['digit'] for d in analysis_result['digits']],
-            'object_count': len(analysis_result['objects']),
-            'objects': [f"{o['class_name']} ({o['category']})" for o in analysis_result['objects']],
-            'classifications': [f"{c['class_name']} ({c['confidence']:.2f})" for c in analysis_result['classifications'][:3]],
-            'full_analysis': analysis_result
-        }
-        
-        return jsonify(summary)
-    
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
-if __name__ == '__main__':
-    app.run(debug=True)
-```
-
-## 6. Hoàn thiện giao diện người dùng
-
-### Template chính (`templates/index.html`):
-
-```html
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống phân tích ảnh thông minh cho bán lẻ</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .result-container {
-            display: none;
-            margin-top: 20px;
-        }
-        .image-container {
-            margin-bottom: 20px;
-        }
-        .image-container img {
-            max-width: 100%;
-            max-height: 500px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-        .section-title {
-            margin-top: 15px;
-            margin-bottom: 10px;
-            font-weight: bold;
-            color: #333;
-        }
-    </style>
-</head>
-<body>
-    <div class="container mt-5">
-        <h1 class="text-center mb-4">Hệ thống phân tích ảnh thông minh cho bán lẻ</h1>
-        
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        Tải lên ảnh để phân tích
-                    </div>
-                    <div class="card-body">
-                        <form id="uploadForm" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label for="imageUpload" class="form-label">Chọn ảnh:</label>
-                                <input class="form-control" type="file" id="imageUpload" name="file" accept="image/*">
-                            </div>
-                            <button type="submit" class="btn btn-primary">Phân tích</button>
-                        </form>
-                        
-                        <div class="loading" id="loadingIndicator">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Đang tải...</span>
-                            </div>
-                            <p class="mt-2">Đang phân tích ảnh, vui lòng đợi...</p>
-                        </div>
-                        
-                        <div class="result-container" id="resultContainer">
-                            <h3 class="section-title">Kết quả phân tích</h3>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="image-container">
-                                        <h4>Ảnh gốc</h4>
-                                        <img id="originalImage" src="" alt="Ảnh gốc">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="image-container">
-                                        <h4>Ảnh phân tích</h4>
-                                        <img id="resultImage" src="" alt="Kết quả">
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="mt-4">
-                                <h4 class="section-title">Tóm tắt</h4>
-                                <div class="card">
-                                    <div class="card-body">
-                                        <div id="digitResults" class="mb-3">
-                                            <p><strong>Nhận diện chữ số:</strong> <span id="digitValues"></span></p>
-                                        </div>
-                                        
-                                        <div id="objectResults" class="mb-3">
-                                            <p><strong>Các đối tượng phát hiện được:</strong></p>
-                                            <ul id="objectList"></ul>
-                                        </div>
-                                        
-                                        <div id="classificationResults">
-                                            <p><strong>Phân loại ảnh:</strong></p>
-                                            <ul id="classificationList"></ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.getElementById('uploadForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            const resultContainer = document.getElementById('resultContainer');
-            
-            // Hiển thị loading
-            loadingIndicator.style.display = 'block';
-            resultContainer.style.display = 'none';
-            
-            fetch('/analyze', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Ẩn loading
-                loadingIndicator.style.display = 'none';
-                
-                if (data.error) {
-                    alert('Lỗi: ' + data.error);
-                    return;
-                }
-                
-                // Hiển thị kết quả
-                document.getElementById('originalImage').src = data.image_path;
-                document.getElementById('resultImage').src = data.result_image_path;
-                
-                // Hiển thị chữ số
-                const digitValues = document.getElementById('digitValues');
-                if (data.digit_count > 0) {
-                    digitValues.textContent = data.digits.join(', ');
-                    document.getElementById('digitResults').style.display = 'block';
-                } else {
-                    digitValues.textContent = 'Không tìm thấy chữ số';
-                    document.getElementById('digitResults').style.display = 'block';
-                }
-                
-                // Hiển thị đối tượng
-                const objectList = document.getElementById('objectList');
-                objectList.innerHTML = '';
-                if (data.object_count > 0) {
-                    data.objects.forEach(obj => {
-                        const li = document.createElement('li');
-                        li.textContent = obj;
-                        objectList.appendChild(li);
-                    });
-                    document.getElementById('objectResults').style.display = 'block';
-                } else {
-                    const li = document.createElement('li');
-                    li.textContent = 'Không tìm thấy đối tượng được biết đến';
-                    objectList.appendChild(li);
-                    document.getElementById('objectResults').style.display = 'block';
-                }
-                
-                // Hiển thị phân loại
-                const classificationList = document.getElementById('classificationList');
-                classificationList.innerHTML = '';
-                if (data.classifications && data.classifications.length > 0) {
-                    data.classifications.forEach(cls => {
-                        const li = document.createElement('li');
-                        li.textContent = cls;
-                        classificationList.appendChild(li);
-                    });
-                    document.getElementById('classificationResults').style.display = 'block';
-                } else {
-                    const li = document.createElement('li');
-                    li.textContent = 'Không thể phân loại';
-                    classificationList.appendChild(li);
-                    document.getElementById('classificationResults').style.display = 'block';
-                }
-                
-                // Hiển thị container kết quả
-                resultContainer.style.display = 'block';
-            })
-            .catch(error => {
-                loadingIndicator.style.display = 'none';
-                alert('Lỗi: ' + error);
-            });
-        });
-    </script>
-</body>
-</html>
-```
-
-## 7. Chạy ứng dụng
-
-1. Đảm bảo đã tạo đầy đủ cấu trúc thư mục và các file như đã mô tả
-2. Huấn luyện mô hình MNIST:
-   ```bash
-   python train_mnist.py
-   ```
-3. Chạy ứng dụng Flask:
-   ```bash
-   python app.py
-   ```
-4. Truy cập ứng dụng tại địa chỉ: `http://127.0.0.1:5000`
-
-## 8. Triển khai lên môi trường production (tùy chọn)
-
-Để triển khai ứng dụng lên môi trường production, bạn có thể:
-
-1. Sử dụng Gunicorn + Nginx:
-   ```bash
-   pip install gunicorn
-   
-   # Chạy với gunicorn
-   gunicorn -w 4 -b 127.0.0.1:8000 app:app
-   ```
-
-2. Sử dụng Docker:
-   
-   Tạo file `Dockerfile`:
-   ```dockerfile
-   FROM python:3.9-slim
-   
-   WORKDIR /app
-   
-   COPY requirements.txt .
-   RUN pip install --no-cache-dir -r requirements.txt
-   
-   COPY . .
-   
-   # Tạo thư mục cần thiết
-   RUN mkdir -p static/uploads static/results models
-   
-   # Đảm bảo huấn luyện mô hình MNIST trước khi đóng gói
-   RUN python train_mnist.py
-   
-   EXPOSE 5000
-   
-   CMD ["python", "app.py"]
-   ```
-   
-   Tạo file `requirements.txt`:
-   ```
-   tensorflow
-   opencv-python-headless
-   pillow
-   flask
-   ultralytics
-   numpy
-   ```
-   
-   Build và chạy Docker container:
-   ```bash
-   docker build -t smart-retail-vision .
-   docker run -p 5000:5000 smart-retail-vision
-   ```
-
-## 9. Cải tiến và mở rộng
-
-Sau khi triển khai cơ bản, bạn có thể cải tiến hệ thống bằng cách:
-
-1. **Cải thiện nhận dạng chữ số**:
-   - Sử dụng OCR (Optical Character Recognition) thay vì chỉ MNIST để nhận dạng văn bản và mã vạch
-   - Tích hợp thư viện như Tesseract OCR hoặc EasyOCR
-
-2. **Cải thiện phát hiện đối tượng**:
-   - Fine-tune YOLOv8 trên tập dữ liệu bán lẻ cụ thể
-   - Thêm khả năng đếm số lượng sản phẩm tương tự
-
-3. **Nâng cao phân loại**:
-   - Fine-tune mô hình ResNet50 trên các danh mục cụ thể của cửa hàng
-   - Thêm khả năng phân tích bố cục kệ hàng
-
-4. **Tích hợp phân tích thêm**:
-   - Phân tích mật độ khách hàng trong cửa hàng
-   - Theo dõi chuyển động và luồng khách hàng
-   - Phân tích cảm xúc khách hàng
-
-5. **Nâng cấp giao diện**:
-   - Thêm bảng điều khiển thống kê
-   - Thêm báo cáo theo thời gian thực
-   - Tích hợp với các hệ thống quản lý hàng tồn kho
+Dự án này giúp bạn hiểu cách ResNet hoạt động trên các loại dữ liệu khác nhau (màu, grayscale, phức tạp) và đánh giá ưu/nhược điểm của từng bộ dữ liệu. Nếu cần code chi tiết hơn, hướng dẫn tải Tiny ImageNet, hoặc phân tích kết quả, hãy báo mình!
